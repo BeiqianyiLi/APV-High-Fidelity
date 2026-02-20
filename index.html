@@ -107,10 +107,10 @@
         }
         
         .brand-card .logo-wrap img {
-            width: 25%;
-            height: 25%;
-            min-width: 32px;
-            min-height: 32px;
+            width: 4rem;
+            height: 4rem;
+            min-width: 64px;
+            min-height: 64px;
             object-fit: contain;
         }
         
@@ -412,21 +412,22 @@
                             <h3 class="text-xl font-medium mb-4">Material & Color</h3>
                             <div class="mb-4">
                                 <label class="text-sm font-medium text-gray-300 mb-2 block">Material</label>
-                                <select id="material-select" onchange="updateMaterial()" class="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500 text-sm">
+                                <select id="material-select" onchange="updateMaterial(); calculateTotal();" class="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500 text-sm">
                                     <option value="leather">Premium Leather</option>
-                                    <option value="knit">Knit</option>
+                                    <option value="metal">Metal</option>
                                     <option value="silicone">Silicone</option>
+                                    <option value="fabric">Fabric</option>
                                 </select>
                             </div>
                             <label class="text-sm font-medium text-gray-300 mb-2 block">Color</label>
-                            <div id="color-options" class="grid grid-cols-4 gap-3"></div>
+                            <div id="color-options" class="grid grid-cols-4 gap-3 items-center justify-items-center"></div>
                         </div>
 
                         <div class="glass rounded-2xl p-6">
                             <h3 class="text-xl font-medium mb-4">Advanced Engraving</h3>
                             <div class="mb-4">
                                 <label class="text-sm font-medium text-gray-300 mb-2 block">Custom Text</label>
-                                <input type="text" id="engraving-text" placeholder="Max 30 characters" maxlength="30" class="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" oninput="updateEngravingPreview()" />
+                                <input type="text" id="engraving-text" placeholder="Max 30 characters" maxlength="30" class="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" oninput="updateEngravingPreview(); calculateTotal();" />
                             </div>
                             <div class="mb-4">
                                 <label class="text-sm font-medium text-gray-300 mb-2 block">Font</label>
@@ -468,6 +469,7 @@
                                 <div>
                                     <div class="text-sm text-gray-400 mb-1">Starting from</div>
                                     <div id="price-display" class="text-3xl font-light">$3,499</div>
+                                    <div id="price-breakdown" class="text-xs text-gray-500 mt-1 min-h-[1.25rem]"></div>
                                 </div>
                                 <button
                                     id="btn-add-personalize"
@@ -517,9 +519,19 @@
 
         const materialColors = {
             leather: [{ name: 'Midnight', value: '#111827' }, { name: 'Saddle Brown', value: '#78350f' }, { name: 'Crimson', value: '#7f1d1d' }, { name: 'Black', value: '#000000' }],
-            knit: [{ name: 'Navy', value: '#1e3a8a' }, { name: 'Gray', value: '#4b5563' }, { name: 'Beige', value: '#fef3c7' }, { name: 'Charcoal', value: '#374151' }],
-            silicone: [{ name: 'Black', value: '#000000' }, { name: 'White', value: '#ffffff' }, { name: 'Blue', value: '#2563eb' }, { name: 'Red', value: '#dc2626' }]
+            metal: [{ name: 'Titanium', value: '#4b5563' }, { name: 'Silver', value: '#d1d5db' }, { name: 'Space Black', value: '#000000' }, { name: 'Gold', value: '#d4af37' }],
+            silicone: [{ name: 'Black', value: '#000000' }, { name: 'White', value: '#ffffff' }, { name: 'Blue', value: '#2563eb' }, { name: 'Red', value: '#dc2626' }],
+            fabric: [{ name: 'Navy', value: '#1e3a8a' }, { name: 'Gray', value: '#4b5563' }, { name: 'Beige', value: '#fef3c7' }, { name: 'Charcoal', value: '#374151' }]
         };
+
+        const MATERIAL_COSTS = {
+            leather: 199,
+            metal: 299,
+            silicone: 0,
+            fabric: 49
+        };
+        const ENGRAVING_COST = 99;
+        const BASE_PRICE = 3499;
 
         function switchTab(tabName) {
             currentTab = tabName;
@@ -584,13 +596,14 @@
             selectedMaterial = document.getElementById('material-select').value;
             populateColorOptions();
             applyHeadbandColor();
+            calculateTotal();
         }
 
         function populateColorOptions() {
             const colors = materialColors[selectedMaterial] || [];
             const container = document.getElementById('color-options');
             container.innerHTML = colors.map(c =>
-                '<button type="button" onclick="selectColor(\'' + c.value + '\')" class="aspect-square rounded-lg border-2 border-transparent hover:border-white/50 transition-all" style="background-color:' + c.value + '" data-color="' + c.value + '" title="' + c.name + '"></button>'
+                '<button type="button" onclick="selectColor(\'' + c.value + '\')" class="w-12 h-12 rounded-lg border-2 border-transparent hover:border-white/50 transition-all flex-shrink-0" style="background-color:' + c.value + '" data-color="' + c.value + '" title="' + c.name + '"></button>'
             ).join('');
         }
 
@@ -600,7 +613,7 @@
                 btn.classList.toggle('border-white', btn.dataset.color === colorValue);
             });
             applyHeadbandColor();
-            updatePrice();
+            calculateTotal();
         }
 
         function hexToLinearRgb(hex) {
@@ -659,16 +672,30 @@
             document.getElementById('font-size-value').textContent = document.getElementById('engraving-size').value;
         }
 
-        function updatePrice() {
-            let newPrice = basePrice;
-            const premiums = { leather: 200, knit: 150, silicone: 100 };
-            if (selectedMaterial && premiums[selectedMaterial]) newPrice += premiums[selectedMaterial];
-            if (newPrice !== currentPrice) {
-                currentPrice = newPrice;
-                const el = document.getElementById('price-display');
-                el.classList.add('price-bounce');
-                el.textContent = '$' + newPrice.toLocaleString();
-                setTimeout(() => el.classList.remove('price-bounce'), 500);
+        function calculateTotal() {
+            var total = BASE_PRICE;
+            var materialCost = MATERIAL_COSTS[selectedMaterial] !== undefined ? MATERIAL_COSTS[selectedMaterial] : 0;
+            var engravingText = (document.getElementById('engraving-text') && document.getElementById('engraving-text').value || '').trim();
+            var engravingCost = engravingText.length > 0 ? ENGRAVING_COST : 0;
+            total += materialCost + engravingCost;
+
+            currentPrice = total;
+
+            var priceEl = document.getElementById('price-display');
+            var breakdownEl = document.getElementById('price-breakdown');
+            if (priceEl) {
+                priceEl.classList.add('price-bounce');
+                priceEl.textContent = '$' + total.toLocaleString();
+                setTimeout(function() { priceEl.classList.remove('price-bounce'); }, 500);
+            }
+            if (breakdownEl) {
+                var parts = [];
+                if (materialCost > 0) {
+                    var matLabel = (selectedMaterial === 'leather' ? 'Leather' : selectedMaterial === 'metal' ? 'Metal' : selectedMaterial === 'fabric' ? 'Fabric' : '');
+                    if (matLabel) parts.push('+$' + materialCost + ' ' + matLabel);
+                }
+                if (engravingCost > 0) parts.push('+$' + ENGRAVING_COST + ' Engraving');
+                breakdownEl.textContent = parts.length ? parts.join(', ') : '';
             }
         }
 
@@ -676,14 +703,18 @@
             document.getElementById('main-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', function() {
             populateColorOptions();
-            document.getElementById('engraving-color').addEventListener('input', function() {
-                document.getElementById('color-hex').textContent = this.value.toUpperCase();
-            });
-            const viewer = document.getElementById('model-viewer-personalize');
+            calculateTotal();
+            var colorPicker = document.getElementById('engraving-color');
+            if (colorPicker) {
+                colorPicker.addEventListener('input', function() {
+                    document.getElementById('color-hex').textContent = this.value.toUpperCase();
+                });
+            }
+            var viewer = document.getElementById('model-viewer-personalize');
             if (viewer) {
-                viewer.addEventListener('load', () => applyHeadbandColor());
+                viewer.addEventListener('load', function() { applyHeadbandColor(); });
             }
         });
     </script>
